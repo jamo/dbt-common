@@ -112,3 +112,45 @@ def task_contextvars(**kwargs: Any) -> Generator[None, None, None]:
     finally:
         unset_contextvars(TASK_PREFIX, *kwargs.keys())
         set_contextvars(TASK_PREFIX, **saved)
+
+
+# ============================================================================
+# Current Node Context - for passing full node to adapters during execution
+# ============================================================================
+
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Avoid circular import by only importing type during type checking
+    from dbt.contracts.graph.nodes import ManifestNode
+
+# Context variable for passing the full node during execution
+# This allows adapters to access model config (like labels) at execution time
+_CURRENT_NODE: contextvars.ContextVar = contextvars.ContextVar('current_node', default=None)
+
+
+def set_current_node(node: Optional['ManifestNode']) -> None:
+    """
+    Set the full node object in context for adapter access.
+    
+    This should be called by dbt-core before executing a node,
+    allowing adapters to access the full node configuration including
+    model-specific settings like labels, tags, etc.
+    
+    Args:
+        node: The full ManifestNode being executed, or None to clear
+    """
+    _CURRENT_NODE.set(node)
+
+
+def get_current_node() -> Optional['ManifestNode']:
+    """
+    Get the full node object from execution context.
+    
+    Adapters can use this to access the full node configuration during
+    query execution. Returns None if not currently executing a node.
+    
+    Returns:
+        The current node being executed, or None if not in execution context
+    """
+    return _CURRENT_NODE.get()
